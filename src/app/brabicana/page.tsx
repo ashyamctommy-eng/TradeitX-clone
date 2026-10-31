@@ -40,6 +40,9 @@ export default function AdminPage() {
   const [reply, setReply] = useState('');
   const [confirm, setConfirm] = useState<{ title: string; body: string; action: () => Promise<void> } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [bcTitle, setBcTitle] = useState('');
+  const [bcBody, setBcBody] = useState('');
+  const [bcMsg, setBcMsg] = useState<string | null>(null);
 
   const guard = useCallback(async () => {
     try {
@@ -82,6 +85,19 @@ export default function AdminPage() {
     try { await fn(); await loadAll(); if (section === 'users') await loadUsers(q); }
     catch (e) { alert((e as Error).message); }
     finally { setBusy(false); setConfirm(null); }
+  };
+
+  const broadcast = async (title: string, body: string) => {
+    if (!body.trim()) return;
+    setBcMsg(null);
+    try {
+      const r = await post<{ delivered: boolean }>('/admin/broadcast', { title, body });
+      setBcMsg(r.delivered ? 'Delivered to Telegram ✓' : 'Mirrored in-app — Telegram bot not configured');
+      setBcTitle(''); setBcBody('');
+      await loadAll();
+    } catch (e) {
+      setBcMsg(`Failed: ${(e as Error).message}`);
+    }
   };
 
   const tgAction = async (data: string) => {
@@ -393,6 +409,34 @@ export default function AdminPage() {
                 <Badge tone={tg.configured ? 'positive' : 'warning'}>{tg.configured ? 'Connected' : 'Mirror only'}</Badge>
               </div>
             </Card>
+            <Card className="mb-3 border-white/10 bg-white/[0.03] p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold">Broadcast notice</p>
+                  <p className="text-[11px] text-white/40">Sends instantly to the admin Telegram chat and mirrors here.</p>
+                </div>
+                <Badge tone={tg.configured ? 'positive' : 'warning'}>{tg.configured ? 'Telegram connected' : 'Mirror only'}</Badge>
+              </div>
+              <div className="space-y-2">
+                <input
+                  className="input border-white/10 bg-white/[0.04] text-white placeholder:text-white/25"
+                  placeholder="Title — e.g. Maintenance window"
+                  value={bcTitle} onChange={(ev) => setBcTitle(ev.target.value)}
+                />
+                <textarea
+                  className="input h-20 border-white/10 bg-white/[0.04] py-2 text-white placeholder:text-white/25"
+                  placeholder="Message body…"
+                  value={bcBody} onChange={(ev) => setBcBody(ev.target.value)}
+                />
+                <div className="flex items-center gap-2">
+                  <Button size="sm" disabled={!bcBody.trim()} onClick={() => broadcast(bcTitle || 'Platform notice', bcBody)}>
+                    📡 Broadcast
+                  </Button>
+                  {bcMsg && <span className="text-[11px] text-white/45">{bcMsg}</span>}
+                </div>
+              </div>
+            </Card>
+
             <div className="space-y-2">
               {tg.events.map((e) => (
                 <Card key={e.id} className="border-white/10 bg-white/[0.03] p-3.5">
@@ -414,6 +458,10 @@ export default function AdminPage() {
                           {b.text}
                         </button>
                       ))}
+                      <button onClick={() => broadcast(e.title.replace(/^📡 /, ''), e.body)} disabled={busy}
+                        className="rounded-md border border-[#FFCC00]/30 px-2.5 py-1 text-[11px] text-[#FFCC00]/90 hover:bg-[#FFCC00]/10 disabled:opacity-40">
+                        📡 Broadcast
+                      </button>
                     </div>
                   )}
                 </Card>

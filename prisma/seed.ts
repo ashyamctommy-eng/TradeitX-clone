@@ -50,7 +50,7 @@ async function main() {
     await prisma.autoTradeConfig.upsert({
       where: { userId: uid },
       update: {},
-      create: { userId: uid },
+      create: { userId: uid, activeStrategies: '["strat_alpha"]' },
     });
   }
 
@@ -84,6 +84,44 @@ async function main() {
     const existing = await prisma.copyTrader.findFirst({ where: { name: t.name } });
     if (existing) await prisma.copyTrader.update({ where: { id: existing.id }, data: t });
     else await prisma.copyTrader.create({ data: t });
+  }
+
+  const strategies = [
+    {
+      id: 'strat_alpha', name: 'Alpha Scalper AI',
+      description: 'Low-latency scalper that hunts 5–15 second reversions on major FX pairs.',
+      winRate: 87.4, targetYield: 18.5, riskLevel: 4,
+      configJson: JSON.stringify({ symbol: 'EUR/USD', frequency: 15, duration: 5, maxConcurrent: 2 }),
+    },
+    {
+      id: 'strat_neural', name: 'Neural Forex Grid',
+      description: 'Neural grid that layers entries across support and resistance bands.',
+      winRate: 82.1, targetYield: 12.8, riskLevel: 3,
+      configJson: JSON.stringify({ symbol: 'GBP/USD', frequency: 30, duration: 15, maxConcurrent: 3 }),
+    },
+    {
+      id: 'strat_crypto', name: 'Crypto Momentum v4',
+      description: 'Momentum engine tuned for BTC/ETH volatility bursts, 1–5 minute holds.',
+      winRate: 79.6, targetYield: 24.2, riskLevel: 5,
+      configJson: JSON.stringify({ symbol: 'BTC/USD', frequency: 60, duration: 60, maxConcurrent: 1 }),
+    },
+    {
+      id: 'strat_gold', name: 'Gold Volatility Hunter',
+      description: 'Trades XAU/USD expansion phases with volatility-scaled stake sizing.',
+      winRate: 84.3, targetYield: 15.9, riskLevel: 3,
+      configJson: JSON.stringify({ symbol: 'XAU/USD', frequency: 45, duration: 30, maxConcurrent: 2 }),
+    },
+  ];
+  for (const st of strategies) {
+    await prisma.aiStrategy.upsert({ where: { id: st.id }, update: st, create: st });
+  }
+
+  // migrate legacy strategy names to the seeded ids
+  const legacy = await prisma.autoTradeConfig.findMany();
+  for (const c of legacy) {
+    if (c.activeStrategies.includes('Trend Following')) {
+      await prisma.autoTradeConfig.update({ where: { userId: c.userId }, data: { activeStrategies: '["strat_alpha"]' } });
+    }
   }
 
   const instr = [

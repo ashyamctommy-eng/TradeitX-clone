@@ -6,6 +6,7 @@ import { n, D, adjustBalance, getBalances } from '../money.js';
 import { approveWithdrawal, completeWithdrawal, declineWithdrawal } from '../services/treasury.js';
 import { creditDeposit, settleCryptoInvoice } from '../services/deposits.js';
 import { emitUser, emitTicket, emitAdmin } from '../realtime.js';
+import { pushTelegramEvent } from '../telegram.js';
 import { market } from '../market.js';
 import {
   getGatewaySettings, savePalPluss, saveNowPayments, maskKey, palplussEnabled,
@@ -389,8 +390,11 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.post('/admin/broadcast', async (req) => {
-    const { title, body } = z.object({ title: z.string(), body: z.string() }).parse(req.body);
+    const { title, body } = z.object({ title: z.string().min(1), body: z.string().min(1) }).parse(req.body);
+    // Same path as every other alert: mirror in-app, and send to Telegram when configured.
+    const ev = await pushTelegramEvent({ kind: 'SYSTEM', title: `📡 ${title}`, body, status: 'BROADCAST' });
     emitAdmin('admin:notice', { title, body, at: Date.now() });
-    return { ok: true };
+    const delivered = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_ADMIN_CHAT_ID);
+    return { ok: true, eventId: ev.id, delivered };
   });
 }

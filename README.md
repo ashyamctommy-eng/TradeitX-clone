@@ -74,7 +74,7 @@ tradeitx-platform/
 |---|---|
 | `/auth` | Sign in / sign up |
 | `/dashboard` | 105 px double header, area/candle chart, drawing tools, 22-indicator modal, social feed markers, R/D switcher, `SELL 82%` / `BUY 82%` ticket |
-| `/auto-trade` | Strategies (4 + AI/Test/toggle), Config (frequency, stake, risk 1–5, reinvest, analysis), Signals, live trading history |
+| `/auto-trade` | DB-backed `AiStrategy` cards (4 seeded + custom), Config, live `ai:telemetry` stream, SVG radial gauges, history |
 | `/finances` | Balance card with eye mask, deposit/withdraw, recent activity |
 | `/transactions` | Totals, 3 filters, CSV export, stage badges |
 | `/deposit-options` | Amount, risk warning, 13-currency FX, cards / mobile money / crypto |
@@ -87,6 +87,16 @@ tradeitx-platform/
 | `/admin` | `notFound()` — matches the reference |
 
 ---
+
+## Auto-trading internals
+
+- **Strategies live in `AiStrategy`** (`strat_alpha`, `strat_neural`, `strat_crypto`, `strat_gold`), seeded by `prisma/seed.ts`.
+  Users can create custom strategies (`POST /ai-strategies/custom`) which persist with `isCustom` + `createdByUserId`
+  and are added to their active set.
+- **`ai:telemetry`**: the engine pushes a payload every 2 s to every socket that emitted `ai:subscribe` —
+  running state, resolved strategy, signal snapshot, win rate / P&L, and the last 14 execution log lines.
+  The Signals tab renders those lines in a terminal drawer. REST (`GET /auto-trade/signals`) is only the initial paint.
+- **Execution** uses the strategy's `configJson` (symbol, duration) and settles against the shared price stream.
 
 ## Payment gateways
 
@@ -124,6 +134,10 @@ so the UI and ledger remain testable.
 
 **Withdrawal** → funds move available → locked, row at `PENDING_REVIEW` → admin/Telegram **Approve** → `PROCESSING`; for M-Pesa a PalPluss B2C payout is queued automatically (KES at the withdraw rate) → `transaction.success` completes it with the M-Pesa receipt, `transaction.failed/reversed` declines it and refunds. **Decline** always refunds with a compliance code (`AML-402`, `MRG-108`, `KYC-301`, `PLP-…`). The user can cancel while pending.
 
+**Telegram broadcast**: `/brabicana → Telegram bot` has a composer (title + body) and a `📡 Broadcast` button on every
+feed card. Both call `POST /admin/broadcast`, which routes through `pushTelegramEvent` — delivered to the bot chat when
+configured, always mirrored in-app.
+
 **Telegram**: every deposit, withdrawal and ticket emits a formatted message to `TELEGRAM_ADMIN_CHAT_ID` with inline buttons. Without a token the same events appear in the in-app mirror feed at `/brabicana → Telegram bot`, and those buttons call the identical API actions. Callback data routes to one source of truth (`services/treasury.ts`).
 
 ---
@@ -131,6 +145,9 @@ so the UI and ledger remain testable.
 ## Testing
 
 ```bash
+npm run audit                  # full diagnostic: static wiring + DB + API + headless UI → AUDIT.md
+npm run db:reset               # restore seeded demo ledger (real $0 / demo $10,000)
+
 npm run smoke                  # 25 API assertions: auth, trade settlement, deposits,
                                # crypto webhook, withdrawal maker-checker, support, admin
 npm run test:palpluss          # 14 assertions: pp_test_ key accepted, STK settlement,

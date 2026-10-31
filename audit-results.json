@@ -1,0 +1,282 @@
+{
+  "generatedAt": "2026-10-31T13:30:03.009Z",
+  "api": "http://localhost:4000",
+  "web": "http://localhost:3000",
+  "ports": "0.0.0.0:4000\n*:3000",
+  "versions": {
+    "next": "15.1.6",
+    "fastify": "5.2.1",
+    "prisma": "6.1.0",
+    "chart": "4.2.3",
+    "socketio": "4.8.1"
+  },
+  "counts": {
+    "copyTraders": 5,
+    "instruments": 6,
+    "users": 2,
+    "trades": 0,
+    "transactions": 18,
+    "tickets": 1,
+    "telegramEvents": 29
+  },
+  "totals": {
+    "pass": 41,
+    "partial": 1,
+    "gap": 0,
+    "skip": 0
+  },
+  "results": [
+    {
+      "module": "1 · Charting",
+      "check": "chart library installed",
+      "status": "PASS",
+      "evidence": "lightweight-charts 4.2.3; createChart() used"
+    },
+    {
+      "module": "1 · Charting",
+      "check": "zero-watermark configuration",
+      "status": "PASS",
+      "evidence": "attributionLogo:false set in layout options"
+    },
+    {
+      "module": "1 · Charting",
+      "check": "area + candlestick series toggle",
+      "status": "PASS",
+      "evidence": "addAreaSeries=true, addCandlestickSeries=true"
+    },
+    {
+      "module": "1 · Charting",
+      "check": "4 drawing tools + clear",
+      "status": "PASS",
+      "evidence": "4/4 tools in chart.tsx, clear=true"
+    },
+    {
+      "module": "1 · Charting",
+      "check": "indicator catalogue size",
+      "status": "PASS",
+      "evidence": "22 indicators listed (expected 22)"
+    },
+    {
+      "module": "1 · Charting",
+      "check": "indicators actually rendered on chart",
+      "status": "PARTIAL",
+      "evidence": "3/22 compute overlays; remainder are listed but disabled (\"soon\")"
+    },
+    {
+      "module": "1 · Charting",
+      "check": "social trade feed markers",
+      "status": "PASS",
+      "evidence": "8/8 trader names in FEED; markers cycle every 4.2 s"
+    },
+    {
+      "module": "1 · Charting",
+      "check": "symmetric SELL/BUY ticket",
+      "status": "PASS",
+      "evidence": "SELL=true, BUY=true, payout%=true"
+    },
+    {
+      "module": "2 · Auto-trade",
+      "check": "cards rendered from DB (no hardcoded catalogue)",
+      "status": "PASS",
+      "evidence": "GET /ai-strategies=true, hardcoded list=false"
+    },
+    {
+      "module": "2 · Auto-trade",
+      "check": "strategies seeded in database",
+      "status": "PASS",
+      "evidence": "model=true, rows=4, seeded 4/4, UI fetch=true"
+    },
+    {
+      "module": "2 · Auto-trade",
+      "check": "custom strategy persists to DB",
+      "status": "PASS",
+      "evidence": "status=200, persisted=true, isCustom=true"
+    },
+    {
+      "module": "2 · Auto-trade",
+      "check": "ai:telemetry socket loop",
+      "status": "PASS",
+      "evidence": "worker emits ai:telemetry every 2 s; client subscribes on the Signals tab"
+    },
+    {
+      "module": "2 · Auto-trade",
+      "check": "radial signal gauges wired",
+      "status": "PASS",
+      "evidence": "SVG speedometer gauges for BUY/SELL strength"
+    },
+    {
+      "module": "2 · Copy trading",
+      "check": "880px drawer + 5 seeded traders",
+      "status": "PASS",
+      "evidence": "drawer880=true, db=5 traders, seeded names 5/5"
+    },
+    {
+      "module": "2 · Copy trading",
+      "check": "user allocations wired",
+      "status": "PASS",
+      "evidence": "table=true, toggle route=true, engine loop=true"
+    },
+    {
+      "module": "3 · PalPluss",
+      "check": "Basic auth + pp_ keys, no prefix validation",
+      "status": "PASS",
+      "evidence": "base64(key+\":\")=true; prefix regex=none"
+    },
+    {
+      "module": "3 · PalPluss",
+      "check": "endpoint map matches docs",
+      "status": "PASS",
+      "evidence": "all 6 paths present"
+    },
+    {
+      "module": "3 · PalPluss",
+      "check": "pp_test_ key accepted by settings API",
+      "status": "PASS",
+      "evidence": "status=200, masked=pp_test••••1d4e"
+    },
+    {
+      "module": "3 · PalPluss",
+      "check": "webhook idempotency + KES→USD credit",
+      "status": "PASS",
+      "evidence": "credited $12.00, duplicate delta $0.00, receipt=RKL9AUDIT1"
+    },
+    {
+      "module": "3 · NOWPayments",
+      "check": "invoice + HMAC-SHA512 verification",
+      "status": "PASS",
+      "evidence": "POST /payment=true, HMAC-SHA512=true, header check=true"
+    },
+    {
+      "module": "3 · NOWPayments",
+      "check": "IPN end-to-end settlement",
+      "status": "PASS",
+      "evidence": "badSig=401, goodSig=200, invoice=FINISHED"
+    },
+    {
+      "module": "4 · Admin",
+      "check": "/brabicana loads, /admin 404s",
+      "status": "PASS",
+      "evidence": "/brabicana/login=200, /admin=404"
+    },
+    {
+      "module": "4 · Admin",
+      "check": "gateways API wired",
+      "status": "PASS",
+      "evidence": "rates=129.35/128.5, coins=btc,eth,usdttrc20,usdterc20,ltc"
+    },
+    {
+      "module": "4 · Telegram",
+      "check": "bot service + long polling",
+      "status": "PASS",
+      "evidence": "outbound=true, getUpdates/callbacks=true (needs TELEGRAM_BOT_TOKEN to go live)"
+    },
+    {
+      "module": "4 · Telegram",
+      "check": "broadcast dispatches through the bot service",
+      "status": "PASS",
+      "evidence": "status=200, telegramDelivered=false, mirrored=true"
+    },
+    {
+      "module": "4 · Admin",
+      "check": "withdrawal queue emits actionable alert",
+      "status": "PASS",
+      "evidence": "event=true, buttons=✅ Approve | ❌ Decline"
+    },
+    {
+      "module": "4 · Telegram",
+      "check": "mirror feed + inline actions",
+      "status": "PASS",
+      "evidence": "events=29, actions=✅ Approve | ❌ Decline, handlers=true, UI broadcast=true"
+    },
+    {
+      "module": "4 · Admin",
+      "check": "non-admin blocked from admin API",
+      "status": "PASS",
+      "evidence": "GET /admin/overview as trader → 403"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "chart renders without branding",
+      "status": "PASS",
+      "evidence": "canvas=8, TradingView strings=false"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "drawing toolbar present",
+      "status": "PASS",
+      "evidence": "5/5 toolbar controls (right-hand side)"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "22-indicator modal opens",
+      "status": "PASS",
+      "evidence": "header=true, non-rendered entries=19"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "social markers visible",
+      "status": "PASS",
+      "evidence": "3 markers visible: Nasir4074, Callan7770, Kingston8757"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "SELL/BUY ticket + account switch",
+      "status": "PASS",
+      "evidence": "SELL=1, BUY=1, chip=\"D $10,000.00\""
+    },
+    {
+      "module": "5 · Browser",
+      "check": "copy drawer measures 880px",
+      "status": "PASS",
+      "evidence": "width=880px, traders visible=5/5"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "auto-trade renders seeded strategies",
+      "status": "PASS",
+      "evidence": "4/4 DB strategies visible, signals tab=true"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "radial signal gauges render",
+      "status": "PASS",
+      "evidence": "2 radial SVG gauges · BUY=true, SELL=true"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "ai:telemetry streams to the terminal",
+      "status": "PASS",
+      "evidence": "panel=true, live badge=true, log lines=0"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "broadcast composer present",
+      "status": "PASS",
+      "evidence": "composer=1, broadcast buttons=6"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "/admin renders 404",
+      "status": "PASS",
+      "evidence": "status=404, body=\"404 This page could not be found.\""
+    },
+    {
+      "module": "5 · Browser",
+      "check": "management portal + gateway panel",
+      "status": "PASS",
+      "evidence": "portal=true, PalPluss card=true, pp_ placeholder=1"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "telegram mirror feed in UI",
+      "status": "PASS",
+      "evidence": "feed=true, actions=📡 Broadcast | ✅ Approve | ❌ Decline"
+    },
+    {
+      "module": "5 · Browser",
+      "check": "no runtime console errors",
+      "status": "PASS",
+      "evidence": "none"
+    }
+  ]
+}

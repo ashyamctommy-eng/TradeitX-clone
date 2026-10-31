@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../db.js';
@@ -50,6 +51,66 @@ export async function tradingRoutes(app: FastifyInstance) {
       const msg = (e as Error).message;
       return reply.code(400).send({ error: msg });
     }
+  });
+
+  /* ---------------- AI strategies ---------------- */
+  app.get('/ai-strategies', { preHandler: requireUser }, async (req) => {
+    const rows = await prisma.aiStrategy.findMany({
+      where: { OR: [{ isActive: true }, { createdByUserId: req.user!.id }] },
+      orderBy: [{ isCustom: 'asc' }, { name: 'asc' }],
+    });
+    return rows.map((s) => ({
+      id: s.id, name: s.name, description: s.description, winRate: s.winRate,
+      targetYield: s.targetYield, riskLevel: s.riskLevel, isCustom: s.isCustom,
+      config: (() => { try { return JSON.parse(s.configJson); } catch { return {}; } })(),
+    }));
+  });
+
+  app.post('/ai-strategies/custom', { preHandler: requireUser }, async (req, reply) => {
+    const body = z.object({
+      name: z.string().min(3).max(40),
+      description: z.string().max(200).optional(),
+      riskLevel: z.number().int().min(1).max(5).optional(),
+      baseStrategyId: z.string().optional(),
+    }).parse(req.body);
+
+    const base = body.baseStrategyId
+      ? await prisma.aiStrategy.findUnique({ where: { id: body.baseStrategyId } })
+      : null;
+
+    const exists = await prisma.aiStrategy.findUnique({ where: { name: body.name } });
+    if (exists) return reply.code(409).send({ error: 'NAME_TAKEN' });
+
+    const created = await prisma.aiStrategy.create({
+      data: {
+        id: `strat_custom_${crypto.randomUUID().slice(0, 8)}`,
+        name: body.name,
+        description: body.description || base?.description || 'Custom strategy',
+        winRate: base?.winRate ?? 75,
+        targetYield: base?.targetYield ?? 10,
+        riskLevel: body.riskLevel ?? base?.riskLevel ?? 3,
+        configJson: base?.configJson ?? JSON.stringify({ symbol: 'EUR/USD', frequency: 30, duration: 15, maxConcurrent: 1 }),
+        isCustom: true,
+        createdByUserId: req.user!.id,
+      },
+    });
+
+    const cfg = await prisma.autoTradeConfig.findUnique({ where: { userId: req.user!.id } });
+    const current: string[] = (() => { try { const p = JSON.parse(cfg?.activeStrategies || '[]'); return Array.isArray(p) ? p : []; } catch { return []; } })();
+    if (!current.includes(created.id)) {
+      await prisma.autoTradeConfig.upsert({
+        where: { userId: req.user!.id },
+        create: { userId: req.user!.id, activeStrategies: JSON.stringify([created.id]) },
+        update: { activeStrategies: JSON.stringify([...current, created.id]) },
+      });
+    }
+
+    return {
+      id: created.id, name: created.name, description: created.description,
+      winRate: created.winRate, targetYield: created.targetYield,
+      riskLevel: created.riskLevel, isCustom: true,
+      config: JSON.parse(created.configJson),
+    };
   });
 
   /* ---------------- auto trade ---------------- */

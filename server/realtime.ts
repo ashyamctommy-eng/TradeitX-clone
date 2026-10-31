@@ -5,6 +5,12 @@ import { market } from './market.js';
 
 let io: SocketServer | null = null;
 
+/** Users currently watching the AI telemetry panel. */
+const aiSubscribers = new Set<string>();
+export const addAiSubscriber = (id: string) => aiSubscribers.add(id);
+export const removeAiSubscriber = (id: string) => aiSubscribers.delete(id);
+export const getAiSubscribers = () => [...aiSubscribers];
+
 function parseCookies(header: string | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   if (!header) return out;
@@ -44,6 +50,12 @@ export function initRealtime(server: Server) {
     });
 
     socket.on('support:join', (ticketId: string) => socket.join(`ticket:${ticketId}`));
+
+    socket.on('ai:subscribe', () => {
+      addAiSubscriber(user.id);
+      socket.emit('ai:subscribed', { ok: true });
+    });
+    socket.on('ai:unsubscribe', () => removeAiSubscriber(user.id));
 
     socket.on('disconnect', () => {});
   });

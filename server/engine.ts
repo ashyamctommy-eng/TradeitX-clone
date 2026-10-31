@@ -1,9 +1,74 @@
 import { prisma } from './db.js';
 import { D, n, lockFunds, adjustBalance, getBalances } from './money.js';
 import { market } from './market.js';
-import { emitUser } from './realtime.js';
+import { emitUser, getAiSubscribers } from './realtime.js';
 
 const lastAuto = new Map<string, number>();
+
+/* ---------------- AI telemetry ---------------- */
+
+export type TelemetryLog = { ts: number; level: 'info' | 'trade' | 'win' | 'loss' | 'warn'; msg: string };
+const telemetryLogs = new Map<string, TelemetryLog[]>();
+
+export function pushTelemetryLog(userId: string, level: TelemetryLog['level'], msg: string) {
+  const list = telemetryLogs.get(userId) ?? [];
+  list.push({ ts: Date.now(), level, msg });
+  if (list.length > 60) list.splice(0, list.length - 60);
+  telemetryLogs.set(userId, list);
+}
+
+async function resolveStrategy(cfg: { activeStrategies: string }) {
+  const ids: string[] = (() => {
+    try { const p = JSON.parse(cfg.activeStrategies); return Array.isArray(p) ? p : []; } catch { return []; }
+  })();
+  if (ids.length) {
+    const chosen = await prisma.aiStrategy.findFirst({ where: { id: ids[0] } });
+    if (chosen) return chosen;
+    const byName = await prisma.aiStrategy.findFirst({ where: { name: ids[0] } });
+    if (byName) return byName;
+  }
+  return prisma.aiStrategy.findFirst({ where: { isActive: true }, orderBy: { name: 'asc' } });
+}
+
+async function buildTelemetry(userId: string) {
+  const cfg = await prisma.autoTradeConfig.findUnique({ where: { userId } });
+  if (!cfg) return null;
+  const strategy = await resolveStrategy(cfg);
+  let config: Record<string, unknown> = {};
+  try { config = JSON.parse(strategy?.configJson || '{}'); } catch { config = {}; }
+  const symbol = typeof config.symbol === 'string' ? config.symbol : 'EUR/USD';
+
+  const [settled, wins, agg, botTrades] = await Promise.all([
+    prisma.trade.count({ where: { userId, triggeredBy: 'AUTO_BOT', status: { in: ['WON', 'LOST'] } } }),
+    prisma.trade.count({ where: { userId, triggeredBy: 'AUTO_BOT', status: 'WON' } }),
+    prisma.trade.aggregate({ where: { userId, triggeredBy: 'AUTO_BOT', status: { in: ['WON', 'LOST'] } }, _sum: { pnl: true } }),
+    prisma.trade.count({ where: { userId, triggeredBy: 'AUTO_BOT' } }),
+  ]);
+
+  return {
+    ts: Date.now(),
+    running: cfg.isRunning,
+    strategy: strategy
+      ? { id: strategy.id, name: strategy.name, winRate: strategy.winRate, targetYield: strategy.targetYield, riskLevel: strategy.riskLevel }
+      : null,
+    symbol,
+    signal: signalSnapshot(symbol),
+    stats: {
+      winRate: settled ? Number(((wins / settled) * 100).toFixed(1)) : 0,
+      pnl: Number(n(agg._sum.pnl ?? 0).toFixed(2)),
+      settled,
+      botTrades,
+      frequency: cfg.frequencySeconds,
+      stake: n(cfg.fixedAmount),
+    },
+    logs: (telemetryLogs.get(userId) ?? []).slice(-14),
+  };
+}
+
+export async function emitTelemetry(userId: string) {
+  const payload = await buildTelemetry(userId);
+  if (payload) emitUser(userId, 'ai:telemetry', payload);
+}
 const lastCopy = new Map<string, number>();
 
 export type OpenTradeInput = {
@@ -46,6 +111,12 @@ export async function openTrade(input: OpenTradeInput) {
 
   emitUser(input.userId, 'balance:update', await getBalances(input.userId));
   emitUser(input.userId, 'trade:open', serializeTrade(trade));
+
+  if (input.triggeredBy === 'AUTO_BOT') {
+    pushTelemetryLog(input.userId, 'trade',
+      `${input.direction} ${input.symbol} · $${input.stake.toFixed(2)} · ${input.strategy ?? 'bot'} · ${input.durationSeconds}s`);
+    emitTelemetry(input.userId).catch(() => null);
+  }
   return trade;
 }
 
@@ -109,6 +180,12 @@ async function settleDueTrades() {
       exitPrice: exit, symbol: trade.symbol, direction: trade.direction,
     });
     emitUser(trade.userId, 'balance:update', await getBalances(trade.userId));
+
+    if (trade.triggeredBy === 'AUTO_BOT') {
+      pushTelemetryLog(trade.userId, won ? 'win' : 'loss',
+        `${won ? 'WIN' : 'LOSS'} ${trade.symbol} ${trade.direction} · ${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} · exit ${exit.toFixed(5)}`);
+      emitTelemetry(trade.userId).catch(() => null);
+    }
   }
 }
 
@@ -127,13 +204,17 @@ async function runAutoTraders() {
     const stake = n(cfg.fixedAmount);
     if ((balances[accountType]?.amount ?? 0) < stake) continue;
 
-    const strategies: string[] = safeJson(cfg.activeStrategies);
-    const strategy = strategies[0] ?? 'Trend Following';
-    const direction = momentumDirection('EUR/USD', strategy);
+    const strategyRow = await resolveStrategy(cfg);
+    let botConfig: Record<string, unknown> = {};
+    try { botConfig = JSON.parse(strategyRow?.configJson || '{}'); } catch { botConfig = {}; }
+    const symbol = typeof botConfig.symbol === 'string' ? botConfig.symbol : 'EUR/USD';
+    const duration = typeof botConfig.duration === 'number' ? botConfig.duration : 15;
+    const strategyName = strategyRow?.name ?? 'Alpha Scalper AI';
+    const direction = momentumDirection(symbol, strategyName);
     try {
       await openTrade({
-        userId: cfg.userId, accountType, symbol: 'EUR/USD', direction,
-        stake, durationSeconds: 15, triggeredBy: 'AUTO_BOT', strategy,
+        userId: cfg.userId, accountType, symbol, direction,
+        stake, durationSeconds: duration, triggeredBy: 'AUTO_BOT', strategy: strategyName,
       });
     } catch {
       /* insufficient funds / inactive instrument */
@@ -210,5 +291,14 @@ export function startEngines() {
   setInterval(() => settleDueTrades().catch((e) => console.error('[settle]', e.message)), 1000);
   setInterval(() => runAutoTraders().catch((e) => console.error('[auto]', e.message)), 3000);
   setInterval(() => runCopyTrades().catch((e) => console.error('[copy]', e.message)), 15_000);
-  console.log('[engine] settlement + auto-trade + copy loops running');
+
+  // ai:telemetry — pushes to every socket subscribed to the Signals panel
+  setInterval(async () => {
+    const subscribers = getAiSubscribers();
+    for (const userId of subscribers) {
+      await emitTelemetry(userId).catch(() => null);
+    }
+  }, 2000);
+
+  console.log('[engine] settlement + auto-trade + copy + ai:telemetry loops running');
 }

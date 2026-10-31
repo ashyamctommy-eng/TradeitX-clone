@@ -1,0 +1,224 @@
+// TradeitX platform schema — SQLite (dev) / PostgreSQL (prod-compatible)
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  passwordHash         String
+  username             String
+  phoneNumber          String?
+  countryCode          String   @default("+254")
+  country              String   @default("KE")
+  preferredAccountType String   @default("real") // real | demo
+  userType             String   @default("standard") // standard | vip | admin
+  frozen               Boolean  @default(false)
+  kycRequired          Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  balances      Balance[]
+  transactions  Transaction[]
+  trades        Trade[]
+  autoTrade     AutoTradeConfig?
+  subscriptions UserCopySubscription[]
+  tickets       SupportTicket[]
+  invoices      CryptoDepositInvoice[]
+
+  @@index([userType])
+}
+
+model Balance {
+  id           String   @id @default(cuid())
+  userId       String
+  accountType  String // real | demo
+  amount       Decimal  @default(0)
+  lockedAmount Decimal  @default(0)
+  updatedAt    DateTime @updatedAt
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, accountType])
+  @@index([userId])
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  userId       String
+  accountType  String // real | demo
+  type         String // deposit | withdrawal | trade
+  amount       Decimal
+  feeAmount    Decimal  @default(0)
+  provider     String   @default("internal")
+  providerRef  String?
+  destinationAddress String?
+  status       String   @default("pending") // failed | pending | completed
+  reviewStage  String? // PENDING_REVIEW | PROCESSING | COMPLETED | DECLINED | CANCELLED
+  statusReason String?
+  details      String   @default("")
+  createdAt    DateTime @default(now())
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([status])
+}
+
+model Instrument {
+  symbol      String  @id
+  label       String
+  mode        String  @default("OTC") // OTC | LIVE
+  basePrice   Float
+  payoutRate  Float   @default(0.82)
+  minStake    Float   @default(1)
+  maxStake    Float   @default(1000)
+  isActive    Boolean @default(true)
+  digits      Int     @default(5)
+  sortOrder   Int     @default(0)
+}
+
+model Trade {
+  id              String    @id @default(cuid())
+  userId          String
+  accountType     String // real | demo
+  symbol          String
+  mode            String    @default("OTC")
+  direction       String // BUY | SELL
+  stake           Decimal
+  durationSeconds Int
+  payoutRate      Float     @default(0.82)
+  entryPrice      Float
+  exitPrice       Float?
+  pnl             Decimal?
+  triggeredBy     String    @default("MANUAL") // MANUAL | AUTO_BOT | COPY_TRADE
+  strategy        String?
+  status          String    @default("OPEN") // OPEN | WON | LOST
+  createdAt       DateTime  @default(now())
+  expiresAt       DateTime
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([status, expiresAt])
+}
+
+model AutoTradeConfig {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  isRunning         Boolean  @default(false)
+  activeStrategies  String   @default("[\"Trend Following\"]") // JSON array as text (SQLite-safe)
+  frequencySeconds  Int      @default(30)
+  fixedAmount       Decimal  @default(10)
+  riskLevel         Int      @default(3)
+  reinvestProfits   Boolean  @default(false)
+  useMarketAnalysis Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CopyTrader {
+  id            String   @id @default(cuid())
+  name          String
+  flag          String
+  strategy      String
+  pairs         String   @default("EUR/USD")
+  risk          String   @default("Medium")
+  winRate       Float
+  profit        Float
+  trades        Int
+  drawdown      Float
+  followers     Int      @default(0)
+  lastTradeMins Int      @default(15)
+  verified      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  subscriptions UserCopySubscription[]
+}
+
+model UserCopySubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  traderId  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user   Profile    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trader CopyTrader @relation(fields: [traderId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, traderId])
+}
+
+model CryptoDepositInvoice {
+  id             String   @id @default(cuid())
+  userId         String
+  network        String // BTC | ETH_ERC20 | USDT_TRC20 | USDT_ERC20 | LTC
+  usdAmount      Decimal
+  cryptoAmount   Decimal
+  depositAddress String
+  txHash         String?
+  status         String   @default("WAITING") // WAITING | CONFIRMING | FINISHED | EXPIRED
+  confirmations  Int      @default(0)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+}
+
+model SupportTicket {
+  id                String   @id @default(cuid())
+  userId            String
+  subject           String
+  status            String   @default("OPEN") // OPEN | PENDING | CLOSED
+  priority          String   @default("normal")
+  assignedAgentName String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user     Profile          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages SupportMessage[]
+
+  @@index([userId, status])
+}
+
+model SupportMessage {
+  id         String   @id @default(cuid())
+  ticketId   String
+  senderType String // USER | AGENT | SYSTEM
+  senderName String
+  body       String
+  createdAt  DateTime @default(now())
+
+  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model TelegramEvent {
+  id        String   @id @default(cuid())
+  direction String   @default("OUT") // OUT (bot → chat) | IN (chat → bot)
+  kind      String // DEPOSIT | WITHDRAWAL | TRADE | TICKET | SYSTEM
+  refId     String?
+  title     String
+  body      String
+  status    String   @default("INFO")
+  payload   String?
+  createdAt DateTime @default(now())
+
+  @@index([kind, createdAt])
+}
+
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

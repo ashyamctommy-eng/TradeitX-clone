@@ -1,0 +1,174 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f5f6f8;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --surface-3: #ebebee;
+  --border: #e4e4e7;
+  --border-strong: #d4d4d8;
+  --text: #09090b;
+  --muted: #71717a;
+  --muted-2: #a1a1aa;
+  --primary: #ffcc00;
+  --primary-ink: #0a0a0a;
+  --positive: #16a34a;
+  --negative: #dc2626;
+  --line: #3b82f6;
+  --shadow: 0 1px 2px rgba(9, 9, 11, 0.05), 0 10px 30px -18px rgba(9, 9, 11, 0.25);
+}
+
+.dark {
+  --bg: #08080a;
+  --surface: #121214;
+  --surface-2: #19191c;
+  --surface-3: #232327;
+  --border: #27272a;
+  --border-strong: #3f3f46;
+  --text: #fafafa;
+  --muted: #a1a1aa;
+  --muted-2: #71717a;
+  --primary: #ffcc00;
+  --primary-ink: #0a0a0a;
+  --positive: #22c55e;
+  --negative: #ef4444;
+  --line: #60a5fa;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 18px 40px -24px rgba(0, 0, 0, 0.8);
+}
+
+* { border-color: var(--border); }
+
+html, body { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: rgba(255, 204, 0, 0.35); }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+@layer components {
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow);
+  }
+  .card-flat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+  .muted { color: var(--muted); }
+  .label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .input {
+    width: 100%;
+    height: 42px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    padding: 0 12px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 204, 0, 0.18);
+  }
+  .input::placeholder { color: var(--muted-2); }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: filter 0.15s, background 0.15s, border-color 0.15s;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--primary-ink);
+    border: 1px solid transparent;
+  }
+  .btn-primary:hover:not(:disabled) { filter: brightness(0.95); }
+  .btn-outline {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+  }
+  .btn-outline:hover:not(:disabled) { background: var(--surface-2); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid transparent;
+  }
+  .btn-ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+  .btn-danger { background: var(--negative); color: #fff; border: 1px solid transparent; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 26px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .table-row {
+    display: grid;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-row:last-child { border-bottom: 0; }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--text);
+    transition: background 0.12s;
+  }
+  .nav-item:hover { background: var(--surface-2); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-dot { animation: pulse-dot 1.8s infinite; }
+
+@keyframes slide-in {
+  from { transform: translateX(24px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.sheet-in { animation: slide-in 0.18s ease-out; }

@@ -1,0 +1,50 @@
+{
+  "name": "tradeitx-platform",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently -n api,web -c yellow,cyan \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "tsx watch server/index.ts",
+    "dev:web": "next dev -p 3000",
+    "build": "prisma generate && next build",
+    "start": "concurrently -n api,web -c yellow,cyan \"tsx server/index.ts\" \"next start -p 3000\"",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "setup": "prisma db push && tsx prisma/seed.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "test:webhook": "node scripts/test-webhook.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "6.1.0",
+    "@fastify/cookie": "11.0.2",
+    "@fastify/cors": "10.0.2",
+    "bcryptjs": "2.4.3",
+    "clsx": "2.1.1",
+    "fastify": "5.2.1",
+    "jsonwebtoken": "9.0.2",
+    "lightweight-charts": "4.2.3",
+    "lucide-react": "0.469.0",
+    "next": "15.1.6",
+    "qrcode.react": "4.2.0",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "socket.io": "4.8.1",
+    "socket.io-client": "4.8.1",
+    "tailwind-merge": "2.6.0",
+    "zod": "3.24.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "2.4.6",
+    "@types/jsonwebtoken": "9.0.7",
+    "@types/node": "22.10.7",
+    "@types/react": "19.0.7",
+    "@types/react-dom": "19.0.3",
+    "autoprefixer": "10.4.20",
+    "concurrently": "9.1.2",
+    "postcss": "8.4.49",
+    "prisma": "6.1.0",
+    "tailwindcss": "3.4.17",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3"
+  }
+}

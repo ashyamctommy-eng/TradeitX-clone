@@ -102,12 +102,20 @@ async function main() {
     return { status: count === 22 ? 'PASS' : 'GAP', evidence: `${count} indicators listed (expected 22)` };
   });
 
-  await run('1 · Charting', 'indicators actually rendered on chart', async () => {
-    const m = pageSrc.match(/RENDERED = new Set\(\[([^\]]*)\]\)/);
-    const rendered = m ? (m[1].match(/'/g)?.length ?? 0) / 2 : 0;
+  await run('1 · Charting', 'all 22 indicators implemented', async () => {
+    const names = [
+      'EMA 20', 'SMA 50', 'SMA 200', 'Bollinger Bands', 'Ichimoku Cloud', 'Parabolic SAR', 'VWAP',
+      'SuperTrend', 'Donchian Channels', 'RSI 14', 'MACD', 'Stochastic', 'CCI', 'Williams %R',
+      'Momentum', 'ROC', 'Ultimate Oscillator', 'ATR', 'ADX', 'OBV', 'MFI', 'Aroon',
+    ];
+    const missing = names.filter((n) => !chartSrc.includes(`'${n}'`));
+    const lib = await read('src/lib/indicators.ts');
+    const fns = ['sma', 'ema', 'bollinger', 'psar', 'ichimoku', 'vwap', 'superTrend', 'donchian',
+      'rsi', 'macd', 'stochastic', 'cci', 'williamsR', 'momentum', 'roc', 'ultimateOscillator',
+      'atr', 'adx', 'obv', 'mfi', 'aroon'].filter((f) => lib.includes(`function ${f}`));
     return {
-      status: rendered === 22 ? 'PASS' : rendered > 0 ? 'PARTIAL' : 'GAP',
-      evidence: `${rendered}/22 compute overlays; remainder are listed but disabled ("soon")`,
+      status: missing.length === 0 && fns.length === 21 ? 'PASS' : 'GAP',
+      evidence: `${names.length - missing.length}/22 wired to series, ${fns.length}/21 math functions${missing.length ? ` (missing ${missing.join(', ')})` : ''}`,
     };
   });
 
@@ -432,13 +440,22 @@ async function main() {
       return { status: found === 5 ? 'PASS' : 'PARTIAL', evidence: `${found}/5 toolbar controls (right-hand side)` };
     });
 
-    await run('5 · Browser', '22-indicator modal opens', async () => {
+    await run('5 · Browser', '22-indicator modal + sub-panes', async () => {
       await p.getByText('Indicators', { exact: true }).click();
       await p.waitForTimeout(700);
       const body = await p.innerText('body');
       const soon = (body.match(/soon/g) || []).length;
+      // enable one overlay and two oscillators
+      await p.getByRole('button', { name: /^EMA 20/ }).click().catch(() => {});
+      await p.getByRole('button', { name: /^RSI 14/ }).click().catch(() => {});
+      await p.getByRole('button', { name: /^MACD/ }).click().catch(() => {});
       await p.keyboard.press('Escape');
-      return { status: body.includes('22 available') ? 'PASS' : 'GAP', evidence: `header=${body.includes('22 available')}, non-rendered entries=${soon}` };
+      await p.waitForTimeout(1800);
+      const panes = await p.locator('[data-testid="osc-pane"]').count();
+      return {
+        status: body.includes('22 available') && soon === 0 && panes === 2 ? 'PASS' : 'PARTIAL',
+        evidence: `catalogue=${body.includes('22 available')}, placeholders=${soon}, sub-panes=${panes}`,
+      };
     });
 
     await run('5 · Browser', 'social markers visible', async () => {

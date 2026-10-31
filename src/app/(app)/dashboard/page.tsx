@@ -5,7 +5,7 @@ import {
   Minus, Plus, ChevronLeft, ChevronRight, ChevronDown, CandlestickChart, AreaChart,
   PenLine, Minus as LineIcon, MoveUpRight, GitBranch, SlidersHorizontal, Trash2, Sparkles, Bot, Users,
 } from 'lucide-react';
-import { TradingChart, SocialMarkers, type Tool } from '@/components/chart';
+import { TradingChart, type Tool } from '@/components/chart';
 import { CopyTradeSheet } from '@/components/copy-trade-sheet';
 import { Badge, Button, Modal } from '@/components/ui';
 import { useUser } from '@/components/user-context';
@@ -22,10 +22,9 @@ const DURATIONS = [5, 15, 30, 60, 300];
 const DUR_LABEL: Record<number, string> = { 5: '5s', 15: '15s', 30: '30s', 60: '1m', 300: '5m' };
 
 const INDICATORS = {
-  TREND: ['EMA 20', 'SMA 50', 'SMA 200', 'Bollinger Bands', 'Ichimoku Cloud', 'Parabolic SAR', 'VWAP', 'Supertrend', 'ADX', 'Aroon'],
-  OSCILLATORS: ['RSI 14', 'MACD', 'Stochastic', 'CCI', 'Williams %R', 'Momentum', 'ROC', 'OBV', 'MFI', 'Chaikin Osc.', 'Awesome Osc.', 'TRIX'],
+  TREND: ['EMA 20', 'SMA 50', 'SMA 200', 'Bollinger Bands', 'Ichimoku Cloud', 'Parabolic SAR', 'VWAP', 'SuperTrend', 'Donchian Channels'],
+  OSCILLATORS: ['RSI 14', 'MACD', 'Stochastic', 'CCI', 'Williams %R', 'Momentum', 'ROC', 'Ultimate Oscillator', 'ATR', 'ADX', 'OBV', 'MFI', 'Aroon'],
 };
-const RENDERED = new Set(['EMA 20', 'SMA 50', 'Bollinger Bands']);
 const TOTAL_INDICATORS = Object.values(INDICATORS).flat().length;
 
 export default function DashboardPage() {
@@ -122,12 +121,12 @@ export default function DashboardPage() {
       </div>
 
       {/* chart */}
-      <div className="relative min-h-[280px] flex-1 border-b border-[var(--border)] bg-[var(--surface)]">
+      <div className="relative min-h-[280px] flex-1 overflow-y-auto border-b border-[var(--border)] bg-[var(--surface)]">
         <TradingChart
           symbol={symbol} digits={digits} kind={kind} tf={tf} tool={tool}
           indicators={indicators} clearSignal={clearSignal} onPrice={setPrice}
+          payout={payout}
         />
-        <SocialMarkers payout={payout} />
 
         <div className="absolute right-14 top-2 z-20 flex items-center gap-1 rounded-lg border border-[var(--border)] bg-[var(--surface)]/95 p-1 shadow-sm backdrop-blur">
           <ToolBtn active={kind === 'candles'} onClick={() => setKind('candles')} title="Candlesticks"><CandlestickChart size={15} /></ToolBtn>
@@ -149,10 +148,6 @@ export default function DashboardPage() {
           >
             {['5s', '1m', '5m'].map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
-        </div>
-
-        <div className="absolute left-2 top-9 z-10 flex flex-col gap-1 text-[10px] text-[var(--muted)]">
-          <span className="rounded bg-[var(--surface)]/80 px-1.5 py-0.5">{payout ? `${(payout * 100).toFixed(0)}% payout` : ''}</span>
         </div>
 
         {toast && (
@@ -265,7 +260,6 @@ function IndicatorsModal({
   open, onClose, selected, onChange,
 }: { open: boolean; onClose: () => void; selected: string[]; onChange: (v: string[]) => void }) {
   const toggle = (name: string) => {
-    if (!RENDERED.has(name)) return;
     onChange(selected.includes(name) ? selected.filter((s) => s !== name) : [...selected, name]);
   };
   return (
@@ -276,21 +270,18 @@ function IndicatorsModal({
             <p className="label mb-2">{group}</p>
             <div className="grid grid-cols-2 gap-1.5">
               {items.map((name) => {
-                const rendered = RENDERED.has(name);
                 const active = selected.includes(name);
                 return (
                   <button
                     key={name}
                     onClick={() => toggle(name)}
-                    disabled={!rendered}
                     className={cn(
                       'flex items-center justify-between rounded-lg border px-2.5 py-2 text-left text-xs transition',
-                      active ? 'border-[var(--primary)] bg-[var(--primary)]/10 font-semibold' : 'border-[var(--border)]',
-                      !rendered && 'cursor-not-allowed opacity-45',
+                      active ? 'border-[var(--primary)] bg-[var(--primary)]/10 font-semibold' : 'border-[var(--border)] hover:bg-[var(--surface-2)]',
                     )}
                   >
                     <span>{name}</span>
-                    {active ? <span className="text-[#8a6d00] dark:text-[#ffcc00]">●</span> : <span className="text-[10px] text-[var(--muted-2)]">{rendered ? 'add' : 'soon'}</span>}
+                    {active ? <span className="text-[#8a6d00] dark:text-[#ffcc00]">●</span> : <span className="text-[10px] text-[var(--muted-2)]">add</span>}
                   </button>
                 );
               })}
@@ -298,7 +289,8 @@ function IndicatorsModal({
           </div>
         ))}
         <p className="text-[11px] text-[var(--muted)]">
-          Overlays render on the chart. Oscillators are computed server-side from the same price series.
+          {selected.length} selected · trend overlays draw on the main chart, oscillators open as stacked
+          sub-panes below it. All 22 are computed from the live candle series.
         </p>
       </div>
     </Modal>

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-31T13:30:03.009Z",
+  "generatedAt": "2026-10-31T13:40:21.662Z",
   "api": "http://localhost:4000",
   "web": "http://localhost:3000",
   "ports": "0.0.0.0:4000\n*:3000",
@@ -15,13 +15,13 @@
     "instruments": 6,
     "users": 2,
     "trades": 0,
-    "transactions": 18,
+    "transactions": 4,
     "tickets": 1,
-    "telegramEvents": 29
+    "telegramEvents": 5
   },
   "totals": {
-    "pass": 41,
-    "partial": 1,
+    "pass": 42,
+    "partial": 0,
     "gap": 0,
     "skip": 0
   },
@@ -58,9 +58,9 @@
     },
     {
       "module": "1 · Charting",
-      "check": "indicators actually rendered on chart",
-      "status": "PARTIAL",
-      "evidence": "3/22 compute overlays; remainder are listed but disabled (\"soon\")"
+      "check": "all 22 indicators implemented",
+      "status": "PASS",
+      "evidence": "22/22 wired to series, 21/21 math functions"
     },
     {
       "module": "1 · Charting",
@@ -186,7 +186,7 @@
       "module": "4 · Telegram",
       "check": "mirror feed + inline actions",
       "status": "PASS",
-      "evidence": "events=29, actions=✅ Approve | ❌ Decline, handlers=true, UI broadcast=true"
+      "evidence": "events=5, actions=✅ Approve | ❌ Decline, handlers=true, UI broadcast=true"
     },
     {
       "module": "4 · Admin",
@@ -208,15 +208,15 @@
     },
     {
       "module": "5 · Browser",
-      "check": "22-indicator modal opens",
+      "check": "22-indicator modal + sub-panes",
       "status": "PASS",
-      "evidence": "header=true, non-rendered entries=19"
+      "evidence": "catalogue=true, placeholders=0, sub-panes=2"
     },
     {
       "module": "5 · Browser",
       "check": "social markers visible",
       "status": "PASS",
-      "evidence": "3 markers visible: Nasir4074, Callan7770, Kingston8757"
+      "evidence": "2 markers visible: Sebastian3916, Kingston8757"
     },
     {
       "module": "5 · Browser",
@@ -252,7 +252,7 @@
       "module": "5 · Browser",
       "check": "broadcast composer present",
       "status": "PASS",
-      "evidence": "composer=1, broadcast buttons=6"
+      "evidence": "composer=1, broadcast buttons=2"
     },
     {
       "module": "5 · Browser",

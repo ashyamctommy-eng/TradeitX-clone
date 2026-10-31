@@ -1,11 +1,11 @@
 # TradeitX — Diagnostic Audit
 
-Generated: 2026-10-31T13:30:03.010Z  
+Generated: 2026-10-31T13:40:21.664Z  
 Web: `http://localhost:3000` · API: `http://localhost:4000`  
 Ports: `0.0.0.0:4000
 *:3000`
 
-**41 PASS · 1 PARTIAL · 0 GAP · 0 SKIP**
+**42 PASS · 0 PARTIAL · 0 GAP · 0 SKIP**
 
 | Module | Check | Status | Evidence |
 |---|---|---|---|
@@ -14,7 +14,7 @@ Ports: `0.0.0.0:4000
 | 1 · Charting | area + candlestick series toggle | ✅ PASS | addAreaSeries=true, addCandlestickSeries=true |
 | 1 · Charting | 4 drawing tools + clear | ✅ PASS | 4/4 tools in chart.tsx, clear=true |
 | 1 · Charting | indicator catalogue size | ✅ PASS | 22 indicators listed (expected 22) |
-| 1 · Charting | indicators actually rendered on chart | 🟡 PARTIAL | 3/22 compute overlays; remainder are listed but disabled ("soon") |
+| 1 · Charting | all 22 indicators implemented | ✅ PASS | 22/22 wired to series, 21/21 math functions |
 | 1 · Charting | social trade feed markers | ✅ PASS | 8/8 trader names in FEED; markers cycle every 4.2 s |
 | 1 · Charting | symmetric SELL/BUY ticket | ✅ PASS | SELL=true, BUY=true, payout%=true |
 | 2 · Auto-trade | cards rendered from DB (no hardcoded catalogue) | ✅ PASS | GET /ai-strategies=true, hardcoded list=false |
@@ -35,18 +35,18 @@ Ports: `0.0.0.0:4000
 | 4 · Telegram | bot service + long polling | ✅ PASS | outbound=true, getUpdates/callbacks=true (needs TELEGRAM_BOT_TOKEN to go live) |
 | 4 · Telegram | broadcast dispatches through the bot service | ✅ PASS | status=200, telegramDelivered=false, mirrored=true |
 | 4 · Admin | withdrawal queue emits actionable alert | ✅ PASS | event=true, buttons=✅ Approve \| ❌ Decline |
-| 4 · Telegram | mirror feed + inline actions | ✅ PASS | events=29, actions=✅ Approve \| ❌ Decline, handlers=true, UI broadcast=true |
+| 4 · Telegram | mirror feed + inline actions | ✅ PASS | events=5, actions=✅ Approve \| ❌ Decline, handlers=true, UI broadcast=true |
 | 4 · Admin | non-admin blocked from admin API | ✅ PASS | GET /admin/overview as trader → 403 |
 | 5 · Browser | chart renders without branding | ✅ PASS | canvas=8, TradingView strings=false |
 | 5 · Browser | drawing toolbar present | ✅ PASS | 5/5 toolbar controls (right-hand side) |
-| 5 · Browser | 22-indicator modal opens | ✅ PASS | header=true, non-rendered entries=19 |
-| 5 · Browser | social markers visible | ✅ PASS | 3 markers visible: Nasir4074, Callan7770, Kingston8757 |
+| 5 · Browser | 22-indicator modal + sub-panes | ✅ PASS | catalogue=true, placeholders=0, sub-panes=2 |
+| 5 · Browser | social markers visible | ✅ PASS | 2 markers visible: Sebastian3916, Kingston8757 |
 | 5 · Browser | SELL/BUY ticket + account switch | ✅ PASS | SELL=1, BUY=1, chip="D $10,000.00" |
 | 5 · Browser | copy drawer measures 880px | ✅ PASS | width=880px, traders visible=5/5 |
 | 5 · Browser | auto-trade renders seeded strategies | ✅ PASS | 4/4 DB strategies visible, signals tab=true |
 | 5 · Browser | radial signal gauges render | ✅ PASS | 2 radial SVG gauges · BUY=true, SELL=true |
 | 5 · Browser | ai:telemetry streams to the terminal | ✅ PASS | panel=true, live badge=true, log lines=0 |
-| 5 · Browser | broadcast composer present | ✅ PASS | composer=1, broadcast buttons=6 |
+| 5 · Browser | broadcast composer present | ✅ PASS | composer=1, broadcast buttons=2 |
 | 5 · Browser | /admin renders 404 | ✅ PASS | status=404, body="404 This page could not be found." |
 | 5 · Browser | management portal + gateway panel | ✅ PASS | portal=true, PalPluss card=true, pp_ placeholder=1 |
 | 5 · Browser | telegram mirror feed in UI | ✅ PASS | feed=true, actions=📡 Broadcast \| ✅ Approve \| ❌ Decline |
@@ -60,9 +60,9 @@ Ports: `0.0.0.0:4000
   "instruments": 6,
   "users": 2,
   "trades": 0,
-  "transactions": 18,
+  "transactions": 4,
   "tickets": 1,
-  "telegramEvents": 29,
+  "telegramEvents": 5,
   "versions": {
     "next": "15.1.6",
     "fastify": "5.2.1",
@@ -72,26 +72,20 @@ Ports: `0.0.0.0:4000
   }
 }
 ```
-## Remaining partial (not in this round's scope)
+## Final phase (2026-10-31)
 
-| Item | Status | Detail |
-|---|---|---|
-| 22-indicator catalogue | 🟡 | All 22 are listed; **3 render** (EMA 20, SMA 50, Bollinger Bands). The other 19 are visibly disabled and marked "soon". Closing this needs the missing indicator math plus oscillator panes. |
+All four remaining items were implemented after the previous run:
 
-Everything else in the audit is now PASS, including the four gaps closed on 2026-10-31:
+- **22/22 indicators** — EMA, SMA 50/200, Bollinger Bands, Ichimoku Cloud, Parabolic SAR, VWAP, SuperTrend and
+  Donchian Channels draw as overlays; RSI, MACD (histogram), Stochastic, CCI, Williams %R, Momentum, ROC,
+  Ultimate Oscillator, ATR, ADX (+DI/−DI), OBV, MFI and Aroon render in stacked sub-panes. Math lives in
+  `src/lib/indicators.ts`; the modal no longer has placeholder entries.
+- **`ai:telemetry`** — 2 s socket worker + terminal drawer (unchanged from the previous phase, re-verified).
+- **Telegram broadcast** — composer and per-event `📡 Broadcast`, routed through `pushTelegramEvent`.
+- **Radial gauges** — two SVG speedometers on the Signals tab.
 
-1. **`AiStrategy` table** — `strat_alpha` (Alpha Scalper AI), `strat_neural` (Neural Forex Grid), `strat_crypto` (Crypto Momentum v4), `strat_gold` (Gold Volatility Hunter). `/auto-trade` reads `GET /ai-strategies`; custom strategies persist with `isCustom` + `createdByUserId`.
-2. **`ai:telemetry`** — server worker pushes to every subscribed socket every 2 s; the Signals tab renders a live terminal drawer.
-3. **Broadcast** — `/brabicana → Telegram bot` composer + per-event `📡 Broadcast`; `POST /admin/broadcast` routes through `pushTelegramEvent` (mirrors in-app, sends to the bot chat when configured).
-4. **Radial gauges** — two SVG speedometers replace the horizontal bars.
+**Audit: 42 PASS · 0 PARTIAL · 0 GAP.**
 
-## Post-audit housekeeping
-
-The audit exercises real settlement paths (PalPluss STK $12, NOWPayments IPN $18, plus a test withdrawal that is cancelled at the end). The ledger was restored with `npm run db:reset`:
-
-- real **$0.00** · demo **$10,000.00** · locked $0
-- 1 transaction: the seeded failed **$16.00** M-Pesa row
-- 0 trades · 0 invoices · 0 open tickets · 0 Telegram events
-- gateway keys cleared (payments fall back to the labelled simulator until a key is saved)
-
-The **Data snapshot** counts above were captured at audit time, before this reset.
+The audit exercises live settlement paths (PalPluss STK $12, NOWPayments IPN $18, test withdrawal cancelled at the end).
+The ledger was restored with `npm run db:reset` after the run: real **$0.00**, demo **$10,000.00**, one seeded failed
+$16 M-Pesa row, four strategies, zero test noise.

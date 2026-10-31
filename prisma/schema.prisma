@@ -62,6 +62,12 @@ model Transaction {
   reviewStage  String? // PENDING_REVIEW | PROCESSING | COMPLETED | DECLINED | CANCELLED
   statusReason String?
   details      String   @default("")
+  // gateway metadata (PalPluss / NOWPayments)
+  gatewayAmount        Decimal?
+  gatewayCurrency      String?
+  mpesaReceipt         String?
+  providerTransactionId String?
+  channelId            String?
   createdAt    DateTime @default(now())
 
   user Profile @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -166,6 +172,8 @@ model CryptoDepositInvoice {
   txHash         String?
   status         String   @default("WAITING") // WAITING | CONFIRMING | FINISHED | EXPIRED
   confirmations  Int      @default(0)
+  providerPaymentId String?
+  payCurrency    String?
   expiresAt      DateTime
   createdAt      DateTime @default(now())
 

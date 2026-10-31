@@ -88,13 +88,41 @@ tradeitx-platform/
 
 ---
 
+## Payment gateways
+
+### PalPluss (M-Pesa)
+
+Exact contract and path corrections: **[docs/palpluss.md](docs/palpluss.md)**.
+
+- **Keys:** `pp_live_…` / `pp_test_…`. No prefix validation anywhere — any
+  non-empty key is accepted (the docs' `pk_live_…` snippets are stale).
+- **Auth:** `Authorization: Basic base64("<key>:")`.
+- **Environment:** Live → `api.palpluss.com/v1`, Sandbox → `sandbox.palpluss.com/v1`.
+- **Configured in `/brabicana → Gateways`:** API key, environment, USD→KES
+  deposit/withdraw rates, service wallet balance + top-up, full channel CRUD
+  (Paybill/Till), connection test.
+- **Webhooks:** `POST /api/webhooks/palpluss/stk` and `/b2c`, idempotent on
+  `transaction.id`, storing `mpesa_receipt` and `requestId`. Public HTTPS only —
+  set `PUBLIC_URL` (ngrok in dev).
+
+Without a key the M-Pesa flow falls back to a clearly-labelled local simulation,
+so the UI and ledger remain testable.
+
+### NOWPayments (crypto)
+
+- `POST /v1/payment`, `GET /v1/payment/{id}`, `GET /v1/status`.
+- IPN at `POST /api/webhooks/nowpayments`, verified with HMAC-SHA512 over the
+  sorted JSON body (`x-nowpayments-sig`).
+- Coins: `btc`, `eth`, `usdttrc20`, `usdterc20`, `ltc` — toggled in the admin UI.
+- No key → local sandbox invoices; no outbound calls.
+
 ## Money flows
 
-**M-Pesa deposit** → `POST /api/deposits/mpesa` creates a `pending` row with a `ws_CO_…` ref → `/mpesa-status` polls → admin "Confirm received" credits the balance and writes the audit row.
+**M-Pesa deposit** → `POST /api/deposits/mpesa` converts USD→KES at the admin rate and calls PalPluss STK (or simulates when unconfigured) → `/mpesa-status` polls our row, which reconciles against PalPluss every 10 s → the webhook settles it and stores the M-Pesa receipt. Admin "Confirm received" remains available as a manual fallback.
 
-**Crypto deposit** → `POST /api/deposits/crypto` returns a QR + address (NOWPayments invoice when a key is configured, local sandbox otherwise) → IPN webhook verifies **HMAC-SHA512 over the alphabetically sorted body** → invoice `FINISHED` + balance credit.
+**Crypto deposit** → `POST /api/deposits/crypto` creates a NOWPayments payment (address + exact crypto amount) or a local sandbox invoice → QR + address shown → IPN webhook verifies **HMAC-SHA512 over the alphabetically sorted body** → invoice `FINISHED` + balance credit.
 
-**Withdrawal** → funds move available → locked, row at `PENDING_REVIEW` → admin/Telegram **Approve** → `PROCESSING` → **Mark completed** generates a reference and releases the lock. **Decline** refunds the locked amount with a compliance code (`AML-402`, `MRG-108`, `KYC-301`). The user can cancel while pending.
+**Withdrawal** → funds move available → locked, row at `PENDING_REVIEW` → admin/Telegram **Approve** → `PROCESSING`; for M-Pesa a PalPluss B2C payout is queued automatically (KES at the withdraw rate) → `transaction.success` completes it with the M-Pesa receipt, `transaction.failed/reversed` declines it and refunds. **Decline** always refunds with a compliance code (`AML-402`, `MRG-108`, `KYC-301`, `PLP-…`). The user can cancel while pending.
 
 **Telegram**: every deposit, withdrawal and ticket emits a formatted message to `TELEGRAM_ADMIN_CHAT_ID` with inline buttons. Without a token the same events appear in the in-app mirror feed at `/brabicana → Telegram bot`, and those buttons call the identical API actions. Callback data routes to one source of truth (`services/treasury.ts`).
 
@@ -103,9 +131,11 @@ tradeitx-platform/
 ## Testing
 
 ```bash
-npm run smoke            # 25 API assertions: auth, trade settlement, deposits,
-                         # crypto webhook, withdrawal maker-checker, support, admin
-node scripts/test-webhook.mjs   # signed IPN accepted, bad signature rejected
+npm run smoke                  # 25 API assertions: auth, trade settlement, deposits,
+                               # crypto webhook, withdrawal maker-checker, support, admin
+npm run test:palpluss          # 14 assertions: pp_test_ key accepted, STK settlement,
+                               # duplicate delivery, B2C failure → refund
+node scripts/test-webhook.mjs  # NOWPayments IPN: bad signature 401, good signature settles
 ```
 
 Both pass against the seeded database.

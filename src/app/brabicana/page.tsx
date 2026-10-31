@@ -3,15 +3,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   LayoutDashboard, Users, ArrowDownLeft, ArrowUpRight, Wrench, MessageSquare,
-  Send, LogOut, Search, RefreshCw, Bitcoin, ShieldAlert,
+  Send, LogOut, Search, RefreshCw, Bitcoin, ShieldAlert, CreditCard,
 } from 'lucide-react';
 import { api, post, put } from '@/lib/api';
 import { Badge, Button, Card, Field, Modal, Spinner } from '@/components/ui';
 import { dt, usd } from '@/lib/format';
 import { cn } from '@/lib/cn';
 import { getSocket } from '@/lib/socket';
+import { GatewaysPanel } from '@/components/admin-gateways';
 
-type Section = 'overview' | 'users' | 'deposits' | 'withdrawals' | 'instruments' | 'support' | 'telegram';
+type Section = 'overview' | 'users' | 'deposits' | 'withdrawals' | 'gateways' | 'instruments' | 'support' | 'telegram';
 
 type Overview = { users: number; depositsTotal: number; withdrawalsTotal: number; pendingDeposits: number; pendingWithdrawals: number; tickets: number; trades: number };
 type User = { id: string; email: string; username: string; userType: string; frozen: boolean; kycRequired: boolean; country: string; preferredAccountType: string; balances: Record<string, { amount: number; locked: number }>; createdAt: string };
@@ -109,6 +110,7 @@ export default function AdminPage() {
           ['users', 'Users', Users],
           ['deposits', 'Deposits', ArrowDownLeft],
           ['withdrawals', 'Withdrawals', ArrowUpRight],
+          ['gateways', 'Gateways', CreditCard],
           ['instruments', 'Instruments', Wrench],
           ['support', 'Support desk', MessageSquare],
           ['telegram', 'Telegram bot', Send],
@@ -138,7 +140,7 @@ export default function AdminPage() {
 
       <main className="min-w-0 flex-1 p-4 md:p-6">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold capitalize">{section === 'support' ? 'Support desk' : section === 'telegram' ? 'Telegram command center' : section}</h1>
+          <h1 className="text-lg font-semibold capitalize">{section === 'support' ? 'Support desk' : section === 'telegram' ? 'Telegram command center' : section === 'gateways' ? 'Payment gateways' : section}</h1>
           <Button variant="outline" size="sm" onClick={() => run(loadAll)} className="border-white/15 text-white">
             <RefreshCw size={13} /> Refresh
           </Button>
@@ -291,6 +293,8 @@ export default function AdminPage() {
             ))}
           </Card>
         )}
+
+        {section === 'gateways' && <GatewaysPanel />}
 
         {section === 'instruments' && (
           <div className="space-y-2">

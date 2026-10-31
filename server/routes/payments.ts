@@ -4,9 +4,11 @@ import { prisma } from '../db.js';
 import { requireUser } from '../auth.js';
 import { n } from '../money.js';
 import {
-  createMpesaDeposit, createCryptoInvoice, settleCryptoInvoice, verifyNowPaymentsSignature,
-  CRYPTO_NETWORKS,
+  createMpesaDeposit, createCryptoInvoice, settleCryptoInvoice,
+  reconcileMpesaDeposit, applyPalPlussTransaction, applyNowPaymentsIpn, CRYPTO_NETWORKS,
 } from '../services/deposits.js';
+import { getGatewaySettings, palplussEnabled } from '../services/gatewaySettings.js';
+import { verifyIpn } from '../../src/services/nowpaymentsService.js';
 import { createWithdrawal, cancelWithdrawal, WITHDRAWAL_METHODS } from '../services/treasury.js';
 
 const livePayments = () => process.env.ENABLE_LIVE_PAYMENTS === 'true';
@@ -41,11 +43,15 @@ export async function paymentRoutes(app: FastifyInstance) {
 
   app.get('/deposits/mpesa/:id', { preHandler: requireUser }, async (req, reply) => {
     const { id } = req.params as { id: string };
+    await reconcileMpesaDeposit(id).catch(() => null);
     const tx = await prisma.transaction.findFirst({ where: { id, userId: req.user!.id, type: 'deposit' } });
     if (!tx) return reply.code(404).send({ error: 'NOT_FOUND' });
     return {
       id: tx.id, ref: tx.providerRef, status: tx.status, amount: n(tx.amount),
       details: tx.details, createdAt: tx.createdAt.toISOString(),
+      mpesaReceipt: tx.mpesaReceipt,
+      gatewayAmount: tx.gatewayAmount === null ? null : n(tx.gatewayAmount),
+      gatewayCurrency: tx.gatewayCurrency,
     };
   });
 
@@ -78,16 +84,78 @@ export async function paymentRoutes(app: FastifyInstance) {
   app.post('/webhooks/nowpayments', async (req, reply) => {
     const raw = (req as { rawBody?: string }).rawBody ?? '';
     const sig = req.headers['x-nowpayments-sig'] as string | undefined;
-    if (process.env.NOWPAYMENTS_IPN_SECRET && !verifyNowPaymentsSignature(raw, sig)) {
+    const { nowpayments } = await getGatewaySettings();
+    const secret = nowpayments.ipnSecret || process.env.NOWPAYMENTS_IPN_SECRET || '';
+
+    if (secret && !verifyIpn(raw, sig, secret)) {
       return reply.code(401).send({ error: 'INVALID_SIGNATURE' });
     }
-    const payload = req.body as { payment_status?: string; order_id?: string; payin_hash?: string };
-    // Sandbox/testing path: order_id may carry invoice id directly.
-    const invoiceId = payload.order_id?.startsWith('inv_') ? payload.order_id.slice(4) : payload.order_id;
-    if (invoiceId && ['finished', 'confirmed', 'partially_paid'].includes(payload.payment_status ?? '')) {
-      await settleCryptoInvoice(invoiceId, payload.payin_hash ?? null, 6);
-    }
-    return { ok: true };
+
+    const payload = req.body as {
+      payment_id?: string | number; payment_status?: string; payin_hash?: string;
+      order_id?: string; actually_paid?: number;
+    };
+
+    const result = await applyNowPaymentsIpn(payload).catch(() => ({ ok: false }));
+    return { ...result };
+  });
+
+  /* ---------------- PalPluss webhooks ---------------- */
+
+  const palplussWebhook = async (req: { body: unknown }) => {
+    // Acknowledge immediately; PalPluss retries up to 5× on non-2xx.
+    const body = req.body as {
+      event?: string;
+      event_type?: string;
+      transaction?: {
+        id: string; type?: string; status?: string; amount?: number; currency?: string;
+        phone_number?: string; external_reference?: string; mpesa_receipt?: string | null;
+        result_code?: string | null; result_desc?: string | null;
+        provider_request_id?: string | null; provider_checkout_id?: string | null;
+        transaction_fee?: number;
+      };
+    };
+
+    const t = body.transaction;
+    if (!t?.id || !t.status) return { ok: true, ignored: 'NO_TRANSACTION' };
+
+    // Map the callback shape onto the API transaction shape, then reuse one
+    // idempotent settlement path (guarded by transaction.id).
+    const mapped = {
+      transactionId: t.id,
+      type: (t.type as 'STK' | 'B2C') ?? 'STK',
+      status: t.status as 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'EXPIRED' | 'PENDING' | 'PROCESSING' | 'REVERSED',
+      amount: t.amount ?? 0,
+      currency: t.currency ?? 'KES',
+      phone: t.phone_number,
+      accountReference: t.external_reference,
+      resultCode: t.result_code ?? null,
+      resultDesc: t.result_desc ?? null,
+      mpesaReceipt: t.mpesa_receipt ?? null,
+      providerRequestId: t.provider_request_id ?? null,
+      providerCheckoutId: t.provider_checkout_id ?? null,
+      transactionFee: t.transaction_fee ?? 0,
+    };
+
+    const result = await applyPalPlussTransaction(mapped).catch((e) => ({ ok: false, error: (e as Error).message }));
+    return { ...result };
+  };
+
+  app.post('/webhooks/palpluss/stk', palplussWebhook);
+  app.post('/webhooks/palpluss/b2c', palplussWebhook);
+
+  /* ---------------- gateway info for the deposit UI ---------------- */
+  app.get('/gateway-info', { preHandler: requireUser }, async () => {
+    const { palpluss, nowpayments } = await getGatewaySettings();
+    return {
+      palpluss: {
+        configured: palplussEnabled(palpluss),
+        environment: palpluss.environment,
+        depositRate: palpluss.depositRate,
+        withdrawRate: palpluss.withdrawRate,
+      },
+      nowpayments: { configured: Boolean(nowpayments.apiKey), coins: nowpayments.coins },
+    };
   });
 
   /* ---------------- withdrawals ---------------- */

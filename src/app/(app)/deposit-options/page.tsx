@@ -9,6 +9,10 @@ import { api, post } from '@/lib/api';
 import { usd } from '@/lib/format';
 
 type Fx = { rates: Record<string, number>; updatedAt: string };
+type GwInfo = {
+  palpluss: { configured: boolean; environment: string; depositRate: number; withdrawRate: number };
+  nowpayments: { configured: boolean; coins: string[] };
+};
 type Invoice = { id: string; network: string; address: string; cryptoAmount: number; usdAmount: number; status: string; sandbox: boolean };
 
 const GROUPS = [
@@ -42,6 +46,7 @@ export default function DepositOptionsPage() {
   const router = useRouter();
   const [amount, setAmount] = useState(100);
   const [fx, setFx] = useState<Fx | null>(null);
+  const [gw, setGw] = useState<GwInfo | null>(null);
   const [from, setFrom] = useState('USD');
   const [to, setTo] = useState('EUR');
   const [fxAmount, setFxAmount] = useState(100);
@@ -55,6 +60,10 @@ export default function DepositOptionsPage() {
 
   const loadFx = async () => setFx(await api<Fx>('/fx'));
   useEffect(() => { loadFx(); }, []);
+  useEffect(() => { api<GwInfo>('/gateway-info').then(setGw).catch(() => {}); }, []);
+
+  const coinFor: Record<string, string> = { BTC: 'btc', ETH_ERC20: 'eth', USDT_TRC20: 'usdttrc20', USDT_ERC20: 'usdterc20' };
+  const kesAmount = gw?.palpluss ? Math.round(amount * gw.palpluss.depositRate * 100) / 100 : 0;
 
   const converted = useMemo(() => {
     if (!fx) return 0;
@@ -192,6 +201,17 @@ export default function DepositOptionsPage() {
           <Field label="Amount (USD)">
             <input className="input" value={amount} onChange={(e) => setAmount(Math.max(16, Number(e.target.value) || 16))} inputMode="decimal" />
           </Field>
+          <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-[var(--muted)]">You will be charged</span>
+              <span className="font-semibold">KES {kesAmount.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <p className="mt-0.5 text-[10px] text-[var(--muted)]">
+              {gw?.palpluss?.configured
+                ? `Rate ${gw.palpluss.depositRate} KES/USD · ${gw.palpluss.environment}`
+                : 'Gateway not configured — request will be simulated locally'}
+            </p>
+          </div>
           <p className="text-[11px] text-[var(--muted)]">Deposits are credited only after the M-Pesa confirmation is received. You can track the request on the next screen.</p>
           <Button className="w-full" onClick={startMpesa} disabled={busy || amount < 16}>Send STK push · {usd(amount)}</Button>
         </div>

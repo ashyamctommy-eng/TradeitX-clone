@@ -36,6 +36,7 @@ export default function WithdrawalPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
+  const [kesRate, setKesRate] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     const res = await api<Wd[]>('/withdrawals');
@@ -43,6 +44,10 @@ export default function WithdrawalPage() {
   }, []);
 
   useEffect(() => { load().catch(() => {}); }, [load]);
+  useEffect(() => {
+    api<{ palpluss: { configured: boolean; withdrawRate: number } }>('/gateway-info')
+      .then((g) => setKesRate(g.palpluss.withdrawRate)).catch(() => {});
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,7 +87,7 @@ export default function WithdrawalPage() {
             <Field label="Account type">
               <input className="input bg-[var(--surface-2)]" value="Real account" readOnly />
             </Field>
-            <Field label="Amount (USD)">
+            <Field label="Amount (USD)" hint={kesRate ? `≈ KES ${(amount * kesRate).toLocaleString('en-KE', { minimumFractionDigits: 2 })} at ${kesRate} KES/USD` : undefined}>
               <input className="input" type="number" min={10} value={amount} onChange={(e) => setAmount(Number(e.target.value) || 0)} />
             </Field>
             <Field label="Withdrawal method">

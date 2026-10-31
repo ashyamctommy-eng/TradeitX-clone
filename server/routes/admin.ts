@@ -7,6 +7,14 @@ import { approveWithdrawal, completeWithdrawal, declineWithdrawal } from '../ser
 import { creditDeposit, settleCryptoInvoice } from '../services/deposits.js';
 import { emitUser, emitTicket, emitAdmin } from '../realtime.js';
 import { market } from '../market.js';
+import {
+  getGatewaySettings, savePalPluss, saveNowPayments, maskKey, palplussEnabled,
+} from '../services/gatewaySettings.js';
+import {
+  testConnection, getServiceBalance, topUpServiceWallet, listChannels,
+  createChannel, updateChannel, deleteChannel, PalPlussError,
+} from '../../src/services/palplussService.js';
+import { getApiStatus, NowPaymentsError } from '../../src/services/nowpaymentsService.js';
 
 export async function adminRoutes(app: FastifyInstance) {
   app.addHook('preHandler', requireAdmin);
@@ -205,6 +213,179 @@ export async function adminRoutes(app: FastifyInstance) {
     const { id } = req.params as { id: string };
     await settleCryptoInvoice(id, `sandbox_${Date.now().toString(16)}`, 6);
     return { ok: true, note: 'Sandbox confirmation — development only' };
+  });
+
+
+  /* ---------------- payment gateways ---------------- */
+
+  app.get('/admin/gateways', async () => {
+    const s = await getGatewaySettings();
+    return {
+      palpluss: {
+        configured: palplussEnabled(s.palpluss),
+        keyPreview: maskKey(s.palpluss.apiKey),
+        environment: s.palpluss.environment,
+        depositRate: s.palpluss.depositRate,
+        withdrawRate: s.palpluss.withdrawRate,
+        defaultChannelId: s.palpluss.defaultChannelId,
+      },
+      nowpayments: {
+        configured: Boolean(s.nowpayments.apiKey),
+        keyPreview: maskKey(s.nowpayments.apiKey),
+        ipnConfigured: Boolean(s.nowpayments.ipnSecret),
+        coins: s.nowpayments.coins,
+      },
+      webhookBase: `${(process.env.PUBLIC_URL || 'http://localhost:4000').replace(/\/$/, '')}/api/webhooks`,
+    };
+  });
+
+  app.put('/admin/gateways/palpluss', async (req, reply) => {
+    const body = z.object({
+      apiKey: z.string().optional(),
+      environment: z.enum(['live', 'sandbox']).optional(),
+      depositRate: z.number().positive().max(1000).optional(),
+      withdrawRate: z.number().positive().max(1000).optional(),
+      defaultChannelId: z.string().nullable().optional(),
+    }).parse(req.body);
+
+    const patch: Record<string, unknown> = {};
+    if (body.apiKey !== undefined && !body.apiKey.includes('•')) {
+      patch.apiKey = body.apiKey.trim(); // no prefix validation — pp_ / pk_ / anything
+    }
+    if (body.environment !== undefined) patch.environment = body.environment;
+    if (body.depositRate !== undefined) patch.depositRate = body.depositRate;
+    if (body.withdrawRate !== undefined) patch.withdrawRate = body.withdrawRate;
+    if (body.defaultChannelId !== undefined) patch.defaultChannelId = body.defaultChannelId;
+
+    const saved = await savePalPluss(patch);
+    return {
+      ok: true,
+      configured: palplussEnabled(saved),
+      keyPreview: maskKey(saved.apiKey),
+      environment: saved.environment,
+      depositRate: saved.depositRate,
+      withdrawRate: saved.withdrawRate,
+      defaultChannelId: saved.defaultChannelId,
+    };
+  });
+
+  const ppCfg = async () => {
+    const s = await getGatewaySettings();
+    return { apiKey: s.palpluss.apiKey, environment: s.palpluss.environment };
+  };
+
+  const ppError = (e: unknown, reply: { code: (n: number) => { send: (b: unknown) => unknown } }) => {
+    if (e instanceof PalPlussError) {
+      return reply.code(e.status || 502).send({ error: e.code, message: e.message, requestId: e.requestId });
+    }
+    return reply.code(502).send({ error: 'GATEWAY_ERROR', message: (e as Error).message });
+  };
+
+  app.post('/admin/gateways/palpluss/test', async (_req, reply) => {
+    try {
+      const res = await testConnection(await ppCfg());
+      return res;
+    } catch (e) { return ppError(e, reply); }
+  });
+
+  app.get('/admin/gateways/palpluss/balance', async (_req, reply) => {
+    try {
+      return { ok: true, ...(await getServiceBalance(await ppCfg())) };
+    } catch (e) { return ppError(e, reply); }
+  });
+
+  app.post('/admin/gateways/palpluss/topup', async (req, reply) => {
+    const body = z.object({ amountKes: z.number().min(1), phone: z.string().min(7) }).parse(req.body);
+    try {
+      const tx = await topUpServiceWallet(
+        await ppCfg(),
+        { amountKes: body.amountKes, phone: body.phone, accountReference: 'TOPUP', transactionDesc: 'Wallet top-up' },
+        `topup-${Date.now()}`,
+      );
+      return { ok: true, transactionId: tx.transactionId, status: tx.status, amount: tx.amount };
+    } catch (e) { return ppError(e, reply); }
+  });
+
+  app.get('/admin/gateways/palpluss/channels', async (_req, reply) => {
+    try {
+      return { ok: true, items: await listChannels(await ppCfg()) };
+    } catch (e) { return ppError(e, reply); }
+  });
+
+  app.post('/admin/gateways/palpluss/channels', async (req, reply) => {
+    const body = z.object({
+      name: z.string().min(1),
+      type: z.enum(['PAYBILL', 'TILL_NUMBER', 'SEND_MONEY']),
+      shortcode: z.string().min(1),
+      accountNumber: z.string().optional(),
+      isDefault: z.boolean().optional(),
+    }).parse(req.body);
+    try {
+      const ch = await createChannel(await ppCfg(), body);
+      if (ch.isDefault) await savePalPluss({ defaultChannelId: ch.id });
+      return { ok: true, channel: ch };
+    } catch (e) { return ppError(e, reply); }
+  });
+
+  app.patch('/admin/gateways/palpluss/channels/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = z.object({
+      name: z.string().optional(),
+      accountNumber: z.string().nullable().optional(),
+      isDefault: z.boolean().optional(),
+    }).parse(req.body);
+    try {
+      const ch = await updateChannel(await ppCfg(), id, body);
+      if (body.isDefault) await savePalPluss({ defaultChannelId: id });
+      return { ok: true, channel: ch };
+    } catch (e) { return ppError(e, reply); }
+  });
+
+  app.delete('/admin/gateways/palpluss/channels/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      await deleteChannel(await ppCfg(), id);
+      const s = await getGatewaySettings();
+      if (s.palpluss.defaultChannelId === id) await savePalPluss({ defaultChannelId: null });
+      return { ok: true };
+    } catch (e) { return ppError(e, reply); }
+  });
+
+  app.put('/admin/gateways/nowpayments', async (req) => {
+    const body = z.object({
+      apiKey: z.string().optional(),
+      ipnSecret: z.string().optional(),
+      coins: z.array(z.string()).optional(),
+    }).parse(req.body);
+
+    const patch: Record<string, unknown> = {};
+    if (body.apiKey !== undefined && !body.apiKey.includes('•')) patch.apiKey = body.apiKey.trim();
+    if (body.ipnSecret !== undefined && !body.ipnSecret.includes('•')) patch.ipnSecret = body.ipnSecret.trim();
+    if (body.coins !== undefined) patch.coins = body.coins;
+
+    const saved = await saveNowPayments(patch);
+    return {
+      ok: true,
+      configured: Boolean(saved.apiKey),
+      keyPreview: maskKey(saved.apiKey),
+      ipnConfigured: Boolean(saved.ipnSecret),
+      coins: saved.coins,
+    };
+  });
+
+  app.post('/admin/gateways/nowpayments/test', async (_req, reply) => {
+    const s = await getGatewaySettings();
+    if (!s.nowpayments.apiKey) {
+      return reply.code(400).send({ error: 'NO_API_KEY', message: 'Add a NOWPayments API key first.' });
+    }
+    try {
+      const started = Date.now();
+      const res = await getApiStatus({ apiKey: s.nowpayments.apiKey, ipnSecret: s.nowpayments.ipnSecret });
+      return { ok: true, latencyMs: Date.now() - started, message: res.message };
+    } catch (e) {
+      if (e instanceof NowPaymentsError) return reply.code(e.status || 502).send({ error: 'NOWPAYMENTS_ERROR', message: e.message });
+      return reply.code(502).send({ error: 'GATEWAY_ERROR', message: (e as Error).message });
+    }
   });
 
   app.post('/admin/broadcast', async (req) => {

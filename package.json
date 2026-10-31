@@ -12,7 +12,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "setup": "prisma db push && tsx prisma/seed.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "test:webhook": "node scripts/test-webhook.mjs"
+    "test:webhook": "node scripts/test-webhook.mjs",
+    "test:palpluss": "tsx scripts/test-palpluss-webhook.ts"
   },
   "dependencies": {
     "@prisma/client": "6.1.0",
